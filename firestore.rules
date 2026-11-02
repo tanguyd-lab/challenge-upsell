@@ -1,0 +1,22 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{d}/documents {
+    function connecte() { return request.auth != null && request.auth.token.email_verified == true; }
+    function courriel() { return request.auth.token.email.lower(); }
+    function patron() { return connecte() && courriel() == 'tanguy.denonain@franceia.com'; }
+    function fiche() { return /databases/$(d)/documents/acces/$(courriel()); }
+    function autorise() { return patron() || (connecte() && exists(fiche())); }
+    function admin() { return patron() || (autorise() && get(fiche()).data.role == 'admin'); }
+    function nom() { return get(fiche()).data.nom; }
+    match /acces/{e} { allow read: if autorise(); allow write: if admin(); }
+    match /reglages/{x} { allow read: if autorise(); allow write: if admin(); }
+    match /donnees/{x} { allow read: if autorise(); allow write: if admin(); }
+    match /suivi/{e} {
+      allow read: if autorise();
+      allow create: if admin() || (autorise() && request.resource.data.closeur == nom());
+      allow update: if admin() || (autorise() && resource.data.closeur == nom() && request.resource.data.closeur == resource.data.closeur);
+      allow delete: if admin();
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}
