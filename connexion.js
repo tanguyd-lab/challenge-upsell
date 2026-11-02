@@ -73,7 +73,7 @@ async function installerDonnees(fichier) {
 
 $('pgo').addEventListener('click', async () => {
   try { await signInWithPopup(auth, new GoogleAuthProvider()); }
-  catch (e) { $('pmsg').textContent = 'Connexion impossible : réessayez, ou autorisez les fenêtres pop-up.'; }
+  catch (e) { $('pmsg').textContent = `Connexion impossible (${(e && e.code) || 'erreur inconnue'}) : réessayez, ou autorisez les fenêtres pop-up.`; }
 });
 $('pout').addEventListener('click', () => signOut(auth));
 $('pfic').addEventListener('change', (e) => {
@@ -84,17 +84,26 @@ onAuthStateChanged(auth, async (u) => {
   if (!u) { $('pgo').hidden = false; $('pout').hidden = true; $('pmsg').textContent = 'Connectez-vous avec votre compte Google professionnel.'; return; }
   $('pgo').hidden = true; $('pout').hidden = false;
   const email = (u.email || '').toLowerCase();
-  let acces = null;
-  try { const s = await getDoc(doc(base, 'acces', email)); acces = s.exists() ? s.data() : null; } catch (_) { acces = null; }
+  let acces = null, erreur = '';
+  try { await u.getIdToken(true); const s = await getDoc(doc(base, 'acces', email)); acces = s.exists() ? s.data() : null; } catch (e) { acces = null; erreur = (e && e.code) || 'inconnue'; }
   let installe = false;
   if (acces) { try { installe = (await getDoc(doc(base, 'donnees', 'meta'))).exists(); } catch (_) {} }
   if (!installe && email === PATRON) { $('pmsg').textContent = 'Base vide.'; $('padmin').hidden = false; return; }
-  if (!acces) { $('pmsg').textContent = `Le compte ${email} n'a pas accès au Challenge Upsell.`; return; }
+  if (!acces) {
+    const raison = erreur ? ` Refus de la base (${erreur}), adresse validée par Google : ${u.emailVerified ? 'oui' : 'non'}.` : '';
+    $('pmsg').textContent = `Le compte ${email} n'a pas accès au Challenge Upsell.${raison} Rechargez la page pour réessayer.`;
+    return;
+  }
   if (demarre) return; demarre = true;
+  try {
   const annuaire = Object.fromEntries((await getDocs(collection(base, 'acces'))).docs.map((d) => [d.id, d.data()]));
   installerContrat({ email, nom: acces.nom, admin: acces.role === 'admin' }, annuaire);
   const tech = await getDoc(doc(base, 'reglages', 'technique'));
   document.getElementById('tech').innerHTML = tech.exists() ? tech.data().html : '';
   const s = document.createElement('script'); s.src = 'app.js'; s.charset = 'utf-8'; document.body.append(s);
   $('porte').remove();
+  } catch (e) {
+    demarre = false;
+    $('pmsg').textContent = `Le chargement a échoué pour ${email} (${(e && e.code) || (e && e.message) || 'erreur inconnue'}). Rechargez la page pour réessayer.`;
+  }
 });
