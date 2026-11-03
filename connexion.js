@@ -71,6 +71,17 @@ async function installerDonnees(fichier) {
   location.reload();
 }
 
+/* Mise à jour par un admin : remplace la liste des personnes et la technique, sans toucher aux statuts, closeurs choisis ni accès. */
+async function majDonnees(fichier) {
+  const paquet = JSON.parse(await fichier.text());
+  if (!Array.isArray(paquet.personnes) || !paquet.personnes.length) throw new Error('fichier invalide');
+  const b = await enBase64(JSON.stringify(paquet.personnes));
+  const T = 900000, n = Math.ceil(b.length / T);
+  for (let i = 0; i < n; i++) await setDoc(doc(base, 'donnees', 'p' + i), { b: b.slice(i * T, (i + 1) * T) });
+  await setDoc(doc(base, 'donnees', 'meta'), { morceaux: n, nb: paquet.personnes.length, maj_le: new Date().toISOString() });
+  if (paquet.technique) await setDoc(doc(base, 'reglages', 'technique'), { html: paquet.technique });
+  location.reload();
+}
 $('pgo').addEventListener('click', async () => {
   try { await signInWithPopup(auth, new GoogleAuthProvider()); }
   catch (e) { $('pmsg').textContent = `Connexion impossible (${(e && e.code) || 'erreur inconnue'}) : réessayez, ou autorisez les fenêtres pop-up.`; }
@@ -98,9 +109,15 @@ onAuthStateChanged(auth, async (u) => {
   try {
   const annuaire = Object.fromEntries((await getDocs(collection(base, 'acces'))).docs.map((d) => [d.id, d.data()]));
   installerContrat({ email, nom: acces.nom, admin: acces.role === 'admin' }, annuaire);
+  if (acces.role === 'admin') {
+    $('majwrap').hidden = false;
+    $('pmaj').addEventListener('change', (e) => {
+      majDonnees(e.target.files[0]).catch(() => { $('majwrap').firstChild.textContent = 'Mise à jour échouée, réessayez'; });
+    });
+  }
   const tech = await getDoc(doc(base, 'reglages', 'technique'));
   document.getElementById('tech').innerHTML = tech.exists() ? tech.data().html : '';
-  const s = document.createElement('script'); s.src = 'app.js'; s.charset = 'utf-8'; document.body.append(s);
+  const s = document.createElement('script'); s.src = 'app.js?v=3'; s.charset = 'utf-8'; document.body.append(s);
   $('porte').remove();
   } catch (e) {
     demarre = false;
