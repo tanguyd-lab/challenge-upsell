@@ -71,7 +71,7 @@ async function installerDonnees(fichier) {
   location.reload();
 }
 
-/* Mise à jour par un admin : remplace la liste des personnes et la technique, sans toucher aux statuts, closeurs choisis ni accès. */
+/* Mise à jour par un admin : remplace la liste des personnes, la technique, les listes et les accès fournis, sans toucher aux statuts ni aux offres. */
 async function majDonnees(fichier) {
   const paquet = JSON.parse(await fichier.text());
   if (!Array.isArray(paquet.personnes) || !paquet.personnes.length) throw new Error('fichier invalide');
@@ -80,6 +80,12 @@ async function majDonnees(fichier) {
   for (let i = 0; i < n; i++) await setDoc(doc(base, 'donnees', 'p' + i), { b: b.slice(i * T, (i + 1) * T) });
   await setDoc(doc(base, 'donnees', 'meta'), { morceaux: n, nb: paquet.personnes.length, maj_le: new Date().toISOString() });
   if (paquet.technique) await setDoc(doc(base, 'reglages', 'technique'), { html: paquet.technique });
+  const lot = writeBatch(base);
+  if (paquet.listes) lot.set(doc(base, 'reglages', 'listes'), paquet.listes);
+  for (const [e, v] of Object.entries(paquet.acces || {})) lot.set(doc(base, 'acces', e), v);
+  /* Seul le closeur change : les statuts et offres déjà saisis restent. */
+  for (const [e, nom] of Object.entries(paquet.suivi_closeurs || {})) lot.set(doc(base, 'suivi', e), { closeur: nom }, { merge: true });
+  await lot.commit();
   location.reload();
 }
 $('pgo').addEventListener('click', async () => {
@@ -117,7 +123,7 @@ onAuthStateChanged(auth, async (u) => {
   }
   const tech = await getDoc(doc(base, 'reglages', 'technique'));
   document.getElementById('tech').innerHTML = tech.exists() ? tech.data().html : '';
-  const s = document.createElement('script'); s.src = 'app.js?v=4'; s.charset = 'utf-8'; document.body.append(s);
+  const s = document.createElement('script'); s.src = 'app.js?v=5'; s.charset = 'utf-8'; document.body.append(s);
   $('porte').remove();
   } catch (e) {
     demarre = false;
