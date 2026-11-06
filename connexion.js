@@ -123,7 +123,7 @@ onAuthStateChanged(auth, async (u) => {
   }
   const tech = await getDoc(doc(base, 'reglages', 'technique'));
   document.getElementById('tech').innerHTML = tech.exists() ? tech.data().html : '';
-  const s = document.createElement('script'); s.src = 'app.js?v=5'; s.charset = 'utf-8'; document.body.append(s);
+  const s = document.createElement('script'); s.src = 'app.js?v=6'; s.charset = 'utf-8'; document.body.append(s);
   $('porte').remove();
   } catch (e) {
     demarre = false;
