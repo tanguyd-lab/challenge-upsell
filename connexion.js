@@ -32,6 +32,8 @@ async function lirePersonnes() {
 
 /* Suivi automatique : relu dans CRMIA et DELIV'IA (lecture seule) à 12 h et 19 h, puis rangé dans donnees/suivi_auto. */
 const DEPUIS = '2026-11-03';
+/* Nom CRMIA → nom du tableau, quand ils diffèrent. */
+const ALIAS = { Nizar: 'Nizar Alrobiai' };
 const ETAPES = { rdv_pris: 'RDV pris', no_show: 'No show', nurturing: 'Nurturing', motive: 'Motivé', inscription_en_cours: 'Inscription en cours', inscription_validee: 'Inscription validée', paye: 'Payé', lost: 'Perdu', retracte: 'Rétracté' };
 const COACHING = { nouvelle_demande: 'nouvelle demande', valider_formateur: 'formateur à valider', creer_groupe_whatsapp: 'groupe WhatsApp à créer', preparer: 'en préparation', lost: 'perdu' };
 const jm = (d) => (d ? d.slice(8, 10) + '/' + d.slice(5, 7) : '');
@@ -89,7 +91,8 @@ async function synchroniser({ crm, deliv }) {
     const t = String(r.telephone || '').replace(/\D/g, ''); if (t.length >= 9 && !parTel.has(t.slice(-9))) parTel.set(t.slice(-9), r);
   }
   const s = { depuis: DEPUIS, crm: {}, dv: {} };
-  for (const [id, e, tel, ci, cl, st, ty, v, dc, dm] of lc) {
+  for (const [id, e, tel, ci, cl0, st, ty, v, dc, dm] of lc) {
+    const cl = ALIAS[cl0] || cl0;
     const r = parEmail.get(e) || parId.get(ci) || (tel.length >= 9 ? parTel.get(tel.slice(-9)) : null);
     if (!r) continue;
     (s.crm[r.email] = s.crm[r.email] || []).push({ id, s: st, cl, ty, v: v ? Number(v) : 0, dc, dm });
