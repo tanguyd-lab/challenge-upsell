@@ -21,13 +21,98 @@ const deBase64 = async (b) => {
   return new Response(new Blob([o]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
 };
 
-async function chargerPersonnes() {
+async function lirePersonnes() {
   const m = await getDoc(doc(base, 'donnees', 'meta'));
   if (!m.exists()) throw new Error('vide');
   const n = m.data().morceaux; let b = '';
   const parts = await Promise.all(Array.from({ length: n }, (_, i) => getDoc(doc(base, 'donnees', 'p' + i))));
   for (const p of parts) b += p.data().b;
   return JSON.parse(await deBase64(b));
+}
+
+/* Suivi automatique : relu dans CRMIA et DELIV'IA (lecture seule) à 12 h et 19 h, puis rangé dans donnees/suivi_auto. */
+const DEPUIS = '2026-11-03';
+const ETAPES = { rdv_pris: 'RDV pris', no_show: 'No show', nurturing: 'Nurturing', motive: 'Motivé', inscription_en_cours: 'Inscription en cours', inscription_validee: 'Inscription validée', paye: 'Payé', lost: 'Perdu', retracte: 'Rétracté' };
+const COACHING = { nouvelle_demande: 'nouvelle demande', valider_formateur: 'formateur à valider', creer_groupe_whatsapp: 'groupe WhatsApp à créer', preparer: 'en préparation', lost: 'perdu' };
+const jm = (d) => (d ? d.slice(8, 10) + '/' + d.slice(5, 7) : '');
+const euros = (n) => Number(n).toLocaleString('fr-FR') + '\u00a0€';
+function texteDelivia(x) {
+  if (x.k === 'coaching') return `Coaching ${x.det} demandé le ${jm(x.d)} (${COACHING[x.s] || x.s.replace(/_/g, ' ')})`;
+  if (x.k === 'accomp') return `${x.det.replace(/(\d+)\.00 €/, '$1 €')}, ${x.s === 'actif' ? 'actif' : x.s.replace(/_/g, ' ')} depuis le ${jm(x.d)}`;
+  if (x.k === 'n2') return `Inscription N2 le ${jm(x.d)} (${x.s.replace(/_/g, ' ')})`;
+  const [interet, montant] = x.det.split(' ').reduce((a, w) => (/^\d/.test(w) ? [a[0], w] : [w, a[1]]), ['', '']);
+  const issue = x.s === 'signe' ? 'signé' + (montant ? ', ' + euros(parseFloat(montant)) + ' HT' : '') : x.s === 'pas_interesse' ? 'pas intéressé' : 'en cours';
+  return `Upsell signalé par le formateur le ${jm(x.d)}${interet ? ' (intérêt ' + (interet === 'n2' ? 'N2' : interet) + ')' : ''} : ${issue}`;
+}
+function appliquerSuivi(personnes, s) {
+  for (const r of personnes) {
+    const c = s.crm[r.email];
+    if (c && c.length) {
+      const der = c.slice().sort((a, b) => (b.dm || '').localeCompare(a.dm || ''))[0];
+      r.crm_opps = c;
+      r.crm_statut = ETAPES[der.s] || der.s;
+      r.crm_detail = r.crm_statut + (der.cl ? ' · ' + der.cl : '') + (der.v ? ' · ' + euros(der.v) : '') + ' · modifiée le ' + jm(der.dm) + (c.length > 1 ? ` · ${c.length} opportunités depuis le ${jm(DEPUIS)}` : '');
+    }
+    const d = s.dv[r.email];
+    if (d && d.length) {
+      r.nouveau_delivia = d.map(texteDelivia).join('\n');
+      if (d.some((x) => x.k === 'coaching' && x.s !== 'lost') && !['Réalisé', 'Vendu, en cours', 'Vendu'].includes(r.coaching)) r.coaching = 'Vendu, en cours';
+      const acc = d.find((x) => x.k === 'accomp' && x.s !== 'termine' && x.s !== 'annule');
+      if (acc) { r.accompagnement = 'Oui'; r.accompagnement_detail = texteDelivia(acc); }
+    }
+  }
+  return personnes;
+}
+async function lireSuivi() {
+  try { const s = await getDoc(doc(base, 'donnees', 'suivi_auto')); return s.exists() ? { ...JSON.parse(s.data().j), maj_le: s.data().maj_le } : null; } catch (_) { return null; }
+}
+async function chargerPersonnes() {
+  const [p, s] = await Promise.all([lirePersonnes(), lireSuivi()]);
+  window.__suiviAuto = s ? { maj_le: s.maj_le } : null;
+  return s ? appliquerSuivi(p, s) : p;
+}
+const lignes = (bloc, nb) => {
+  const l = bloc && bloc.x ? String(bloc.x).split('\n').filter((x) => x.trim()) : [];
+  if (bloc && Number(bloc.n) !== l.length) throw new Error(`lignes reçues ${l.length}, attendues ${bloc.n}`);
+  if (l.some((x) => x.split('|').length !== nb)) throw new Error('ligne mal formée');
+  return l.map((x) => x.split('|'));
+};
+/* Appelé par la tâche planifiée, depuis la page ouverte par un admin. crm et deliv : { n, x } tels que rendus par les requêtes SQL. */
+async function synchroniser({ crm, deliv }) {
+  if (!window.__moi || !window.__moi.admin) throw new Error('réservé aux admins');
+  const lc = lignes(crm, 10), ld = lignes(deliv, 5);
+  const personnes = await lirePersonnes();
+  const parEmail = new Map(), parId = new Map(), parTel = new Map();
+  for (const r of personnes) {
+    parEmail.set(r.email.toLowerCase(), r);
+    const m = /contact=([0-9a-f-]{36})/.exec(r.crmia_url || ''); if (m) parId.set(m[1], r);
+    const t = String(r.telephone || '').replace(/\D/g, ''); if (t.length >= 9 && !parTel.has(t.slice(-9))) parTel.set(t.slice(-9), r);
+  }
+  const s = { depuis: DEPUIS, crm: {}, dv: {} };
+  for (const [id, e, tel, ci, cl, st, ty, v, dc, dm] of lc) {
+    const r = parEmail.get(e) || parId.get(ci) || (tel.length >= 9 ? parTel.get(tel.slice(-9)) : null);
+    if (!r) continue;
+    (s.crm[r.email] = s.crm[r.email] || []).push({ id, s: st, cl, ty, v: v ? Number(v) : 0, dc, dm });
+  }
+  for (const [k, e, st, det, d] of ld) {
+    const r = parEmail.get(e); if (!r) continue;
+    (s.dv[r.email] = s.dv[r.email] || []).push({ k, s: st, det, d });
+  }
+  const avant = await lireSuivi();
+  const nom = (e) => { const r = parEmail.get(e); return r ? r.personne + (r.activite ? ' (' + r.activite + ')' : '') : e; };
+  const rapport = { lignes_crmia: lc.length, lignes_delivia: ld.length, personnes_crmia: Object.keys(s.crm).length, personnes_delivia: Object.keys(s.dv).length, premiere_fois: !avant, nouvelles_opportunites: [], changements_etape: [], nouveautes_delivia: [] };
+  const ancien = new Map(); if (avant) for (const [e, os] of Object.entries(avant.crm)) for (const o of os) ancien.set(o.id, o);
+  const vusDv = new Set(); if (avant) for (const [e, xs] of Object.entries(avant.dv)) for (const x of xs) vusDv.add([e, x.k, x.s, x.d].join('|'));
+  for (const [e, os] of Object.entries(s.crm)) for (const o of os) {
+    const a = ancien.get(o.id), ligne = `${nom(e)} : ${ETAPES[o.s] || o.s}${o.cl ? ' · ' + o.cl : ''}${o.v ? ' · ' + euros(o.v) : ''}`;
+    if (!a) rapport.nouvelles_opportunites.push(ligne); else if (a.s !== o.s) rapport.changements_etape.push(`${ligne} (avant : ${ETAPES[a.s] || a.s})`);
+  }
+  for (const [e, xs] of Object.entries(s.dv)) for (const x of xs) if (!vusDv.has([e, x.k, x.s, x.d].join('|'))) rapport.nouveautes_delivia.push(`${nom(e)} : ${texteDelivia(x)}`);
+  const maj = new Date().toISOString();
+  await setDoc(doc(base, 'donnees', 'suivi_auto'), { j: JSON.stringify(s), maj_le: maj });
+  const relu = await lireSuivi();
+  rapport.ecrit = !!(relu && relu.maj_le === maj);
+  return rapport;
 }
 
 /* Même contrat que la page d'origine : le code applicatif ne change pas. */
@@ -52,6 +137,7 @@ function installerContrat(moi, annuaire) {
   };
   window.__moi = moi;
   window.__chargerPersonnes = chargerPersonnes;
+  if (moi.admin) window.__synchroniser = synchroniser;
   window.claude = { use: async (n) => (n === 'db' ? dbf : n === 'user' ? userf : null) };
 }
 
@@ -123,7 +209,7 @@ onAuthStateChanged(auth, async (u) => {
   }
   const tech = await getDoc(doc(base, 'reglages', 'technique'));
   document.getElementById('tech').innerHTML = tech.exists() ? tech.data().html : '';
-  const s = document.createElement('script'); s.src = 'app.js?v=7'; s.charset = 'utf-8'; document.body.append(s);
+  const s = document.createElement('script'); s.src = 'app.js?v=8'; s.charset = 'utf-8'; document.body.append(s);
   $('porte').remove();
   } catch (e) {
     demarre = false;
