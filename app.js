@@ -1,20 +1,20 @@
 (function(){
 const $=(id)=>document.getElementById(id);
 let data=[],suivi=new Map(),listes={closeurs:[],statuts:[]},selected=null,db=null,user=null,canWrite=true,period=0,prevRank=new Map(),view='tableau';
-const f={fin:'',du:'',au:'',closeur:'',statut:'',type:'',coaching:'',acc:'',qualite:'',q:''};
+const f={seg:'',fin:'',du:'',au:'',closeur:'',statut:'',type:'',coaching:'',acc:'',qualite:'',q:''};
 let sortKey='date_formation',sortDir=-1;
 const coll=new Intl.Collator('fr',{numeric:true,sensitivity:'base'});
 const norm=(s)=>(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
 const defs=new Map();
 const get=(e)=>suivi.get(e)||(defs.has(e)?{closeur:defs.get(e)}:{});
 const COPY_ICO='<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="5" width="9" height="9" rx="2"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5"/></svg>';
-const COLS=[{k:'personne',l:'Personne',w:285,t:'name'},{k:'activite',l:'Activité',w:230},{k:'email',l:'E-mail',w:230,t:'copy'},{k:'kyc',l:'Mini KYC',w:320,long:1},{k:'telephone',l:'Téléphone',w:245,t:'copy'},{k:'closeur',l:'Closeur',w:180,t:'pick'},{k:'offre',l:'Offre closée',w:610,t:'pick'},{k:'lien_ard',l:'Lien ARD personnalisé',w:230,t:'lien'},{k:'lien_bd',l:'Lien formulaire accompagnement',w:250,t:'lien'},{k:'besoins',l:'Besoins',w:280,long:1},{k:'questions',l:"Questions d'audit",w:400,long:1},{k:'pistes',l:"Pistes d'implémentation IA",w:400,long:1},{k:'angle',l:'Angle',w:290,long:1},{k:'financement',l:'Financement',w:140,t:'tag'},{k:'formation',s:'date_formation',l:'Date de formation',w:150},{k:'coaching',l:'Coaching',w:135,t:'tag'},{k:'accompagnement',l:'Accompagnement',w:160,t:'tag'},{k:'contact',l:'Contact',w:140,t:'tag'},{k:'qualite',l:'Fiche',w:110,t:'tag'}];
+const COLS=[{k:'personne',l:'Personne',w:285,t:'name'},{k:'activite',l:'Activité',w:230},{k:'email',l:'E-mail',w:230,t:'copy'},{k:'kyc',l:'Mini KYC',w:320,long:1},{k:'telephone',l:'Téléphone',w:245,t:'copy'},{k:'infos_client',l:'Client intra',w:300,intra:1},{k:'apprenants_formes',l:'Apprenants formés',w:300,long:1,intra:1},{k:'closeur',l:'Closeur',w:180,t:'pick'},{k:'offre',l:'Offre closée',w:610,t:'pick'},{k:'lien_ard',l:'Lien ARD personnalisé',w:230,t:'lien'},{k:'lien_bd',l:'Lien formulaire accompagnement',w:250,t:'lien'},{k:'besoins',l:'Besoins',w:280,long:1},{k:'questions',l:"Questions d'audit",w:400,long:1},{k:'pistes',l:"Pistes d'implémentation IA",w:400,long:1},{k:'angle',l:'Angle',w:290,long:1},{k:'financement',l:'Financement',w:140,t:'tag'},{k:'formation',s:'date_formation',l:'Date de formation',w:150},{k:'coaching',l:'Coaching',w:135,t:'tag'},{k:'accompagnement',l:'Accompagnement',w:160,t:'tag'},{k:'contact',l:'Contact',w:140,t:'tag'},{k:'qualite',l:'Fiche',w:110,t:'tag'}];
 const BYK=Object.fromEntries(COLS.map((c)=>[c.k,c]));
 const LS='upsell-colonnes-v1';
 let order=COLS.map((c)=>c.k),widths={},hideLong=false;
-try{const s=JSON.parse(localStorage.getItem(LS)||'null');if(s){if(Array.isArray(s.order)){const known=s.order.filter((k)=>BYK[k]);order=known.concat(COLS.map((c)=>c.k).filter((k)=>!known.includes(k)));const neuves=['offre','lien_ard','lien_bd'].filter((k)=>!s.order.includes(k));if(neuves.length){order=order.filter((k)=>!neuves.includes(k));order.splice(order.indexOf('closeur')+1,0,...neuves);}}if(s.widths)widths=s.widths;}}catch(_){}
+try{const s=JSON.parse(localStorage.getItem(LS)||'null');if(s){if(Array.isArray(s.order)){const known=s.order.filter((k)=>BYK[k]);order=known.concat(COLS.map((c)=>c.k).filter((k)=>!known.includes(k)));if(!s.order.includes('infos_client')){order=order.filter((k)=>k!=='infos_client'&&k!=='apprenants_formes');order.splice(order.indexOf('telephone')+1,0,'infos_client','apprenants_formes');}const neuves=['offre','lien_ard','lien_bd'].filter((k)=>!s.order.includes(k));if(neuves.length){order=order.filter((k)=>!neuves.includes(k));order.splice(order.indexOf('closeur')+1,0,...neuves);}}if(s.widths)widths=s.widths;}}catch(_){}
 const saveCols=()=>{try{localStorage.setItem(LS,JSON.stringify({order,widths}));}catch(_){}};
-const vis=()=>order.map((k)=>BYK[k]).filter((c)=>!(hideLong&&c.long));
+const vis=()=>order.map((k)=>BYK[k]).filter((c)=>!(hideLong&&c.long)&&!(c.intra&&f.seg==='inter'));
 const W=(c)=>widths[c.k]||c.w;
 const val=(r,k)=>k==='closeur'||k==='statut'||k==='offre'?(get(r.email)[k]||''):(r[k]||'');
 const TAG={'CPF':'indigo','Fonds propres':'green','OPCO':'amber','CPF + Fonds propres':'teal','Réalisé':'green','Vendu, en cours':'violet','Vendu':'violet','Demande':'amber','Annulé':'red','Oui':'green','Presta signée':'teal','Presta entreprise':'blue','OK':'green','Ne pas contacter':'red','Désabonné e-mail':'amber','Complète':'green','Partielle':'amber','À qualifier':'red'};
@@ -27,6 +27,7 @@ const tone=(s)=>{const l=listes.statuts.find((x)=>x.nom===s);return l?l.ton||'':
 function match(r){
   const s=get(r.email),q=norm(f.q);
   if((f.du||f.au)&&!r.dates.some((d)=>(!f.du||d>=f.du)&&(!f.au||d<=f.au)))return false;
+  if(f.seg&&(r.segment||'inter')!==f.seg)return false;
   if(f.fin&&!r.financement.split(' + ').includes(f.fin))return false;
   if(f.closeur==='__none'?s.closeur:(f.closeur&&s.closeur!==f.closeur))return false;
   if(f.statut==='__none'?s.statut:(f.statut&&s.statut!==f.statut))return false;
@@ -34,7 +35,7 @@ function match(r){
   if(f.coaching==='deja'?!['Réalisé','Vendu, en cours','Vendu'].includes(r.coaching):(f.coaching&&r.coaching!==f.coaching))return false;
   if(f.acc&&r.accompagnement!==f.acc)return false;
   if(f.qualite==='commune'?r.fiche_type!=='Commune entreprise':(f.qualite&&r.qualite!==f.qualite))return false;
-  if(q&&!norm(r.personne+' '+r.activite+' '+r.secteur+' '+r.email+' '+r.telephone).includes(q))return false;
+  if(q&&!norm(r.personne+' '+r.activite+' '+r.secteur+' '+r.email+' '+r.telephone+' '+(r.apprenants_formes||'')+' '+(r.infos_client||'')).includes(q))return false;
   return true;
 }
 function sorted(list){return list.slice().sort((a,b)=>{const x=val(a,sortKey),y=val(b,sortKey);if(!x&&!y)return 0;if(!x)return 1;if(!y)return -1;return sortDir*coll.compare(x,y);});}
@@ -63,7 +64,7 @@ function renderHead(){
 }
 function cellFor(tr,c,r){
   const td=document.createElement('td');tr.append(td);const v=r[c.k]||'';
-  if(c.t==='name'){const w=document.createElement('div');w.className='pers';const b=document.createElement('button');b.type='button';b.className='name';b.textContent=v;w.append(b);if(r.crmia_url){const a=document.createElement('a');a.className='crm'+(r.crmia==='Fiche entreprise'?' soft':'');a.href=lienCrmia(r.crmia_url);a.target='crmia';a.title=r.crmia==='Fiche entreprise'?"Cette personne n'a pas de fiche : ouvre le contact de son entreprise dans CRMIA":'Ouvrir sa fiche dans CRMIA';a.textContent=r.crmia==='Fiche entreprise'?'Entreprise':'CRMIA';w.append(a);}else{const s=document.createElement('span');s.className='nocrm';s.title='Aucune fiche à son nom dans CRMIA';s.textContent='Pas de fiche';w.append(s);}td.append(w);}
+  if(c.t==='name'){const w=document.createElement('div');w.className='pers';const b=document.createElement('button');b.type='button';b.className='name';b.textContent=v;w.append(b);if(r.segment==='intra'){const t=document.createElement('span');t.className='tagcli';t.title='Client qui a payé la formation intra';t.textContent='Client';w.insertBefore(t,b.nextSibling);}if(r.crmia_url){const a=document.createElement('a');a.className='crm'+(r.crmia==='Fiche entreprise'?' soft':'');a.href=lienCrmia(r.crmia_url);a.target='crmia';a.title=r.crmia==='Fiche entreprise'?"Cette personne n'a pas de fiche : ouvre le contact de son entreprise dans CRMIA":'Ouvrir sa fiche dans CRMIA';a.textContent=r.crmia==='Fiche entreprise'?'Entreprise':'CRMIA';w.append(a);}else{const s=document.createElement('span');s.className='nocrm';s.title='Aucune fiche à son nom dans CRMIA';s.textContent='Pas de fiche';w.append(s);}td.append(w);}
   else if(c.t==='link'){const a=document.createElement('a');a.className='lnk'+(v==='Ouvrir la fiche'?'':' soft');a.href=r.crmia_url;a.target='_blank';a.rel='noopener';a.textContent=v;td.append(a);}
   else if(c.t==='pick')td.append(pick(r,c.k));
   else if(c.t==='lien'){if(c.k==='lien_ard')lienCell(td,r.ard_url,'Copier le lien ARD de cette personne, prêt à envoyer',preparerArd(r.ard_url),'Préparer',"Répondre à sa place (offre, financement, date), puis générer le lien");else lienCell(td,URL_BRAS_DROIT,"Copier le lien du formulaire d'accompagnement",URL_BRAS_DROIT,'Ouvrir',"Ouvrir le formulaire d'accompagnement");}
@@ -86,6 +87,7 @@ async function renderFiche(){
   for(const k of ['personne','activite','email','telephone','financement','parcours','coaching','contact','sources','kyc','angle'])$('ff-'+k).textContent=r[k];
   $('ff-acc').textContent=r.accompagnement+(r.accompagnement_detail?' : '+r.accompagnement_detail:'');
   $('ff-fiche').textContent=r.qualite+' · '+r.fiche_type;
+  document.querySelectorAll('.facts .cli').forEach((d)=>{d.hidden=r.segment!=='intra';});$('ff-infos_client').textContent=r.infos_client||'';$('ff-apprenants_formes').textContent=r.apprenants_formes||'';
   for(const k of ['besoins','questions','pistes'])$('fl-'+k).replaceChildren(...r[k].split('\n').map((l)=>{const li=document.createElement('li');li.textContent=l.replace(/^(\d+\.|-)\s+/,'');return li;}));
   $('ff-crmia').hidden=!r.crmia_url;if(r.crmia_url){$('ff-crmia').href=lienCrmia(r.crmia_url);$('ff-crmia').target='crmia';$('ff-crmia').textContent=r.crmia==='Fiche entreprise'?'Ouvrir la fiche entreprise dans CRMIA':'Ouvrir dans CRMIA';}$('ff-telephone').textContent=r.telephone||'Non trouvé';$('ff-ard').dataset.v=r.ard_url;$('ff-bd').dataset.v=URL_BRAS_DROIT;
   const s=get(r.email);
@@ -148,11 +150,12 @@ function openF(email){selected=email;$('fiche').hidden=false;renderFiche();}
 const closeF=()=>{selected=null;$('fiche').hidden=true;};
 $('close').addEventListener('click',closeF);
 document.addEventListener('keydown',(e)=>{if(e.key==='Escape'&&selected)closeF();});
+document.querySelectorAll('[data-seg]').forEach((b)=>b.addEventListener('click',()=>{f.seg=b.dataset.seg;document.querySelectorAll('[data-seg]').forEach((x)=>x.setAttribute('aria-pressed',String(x===b)));renderHead();renderRows();}));
 document.querySelectorAll('[data-fin]').forEach((b)=>b.addEventListener('click',()=>{f.fin=b.dataset.fin;document.querySelectorAll('[data-fin]').forEach((x)=>x.setAttribute('aria-pressed',String(x===b)));renderRows();}));
 const FK=['du','au','closeur','statut','type','coaching','acc','qualite'];
 for(const k of FK)$('f-'+k).addEventListener('change',(e)=>{if(e.target.value&&!e.target.validity.valid)return;f[k]=e.target.value;renderRows();});
 let timer;$('f-q').addEventListener('input',(e)=>{clearTimeout(timer);timer=setTimeout(()=>{f.q=e.target.value;renderRows();},180);});
-$('reset').addEventListener('click',()=>{for(const k in f)f[k]='';$('f-q').value='';for(const k of FK)$('f-'+k).value='';sortKey='date_formation';sortDir=-1;document.querySelectorAll('[data-fin]').forEach((x)=>x.setAttribute('aria-pressed',String(x.dataset.fin==='')));renderRows();});
+$('reset').addEventListener('click',()=>{for(const k in f)f[k]='';$('f-q').value='';for(const k of FK)$('f-'+k).value='';sortKey='date_formation';sortDir=-1;document.querySelectorAll('[data-fin]').forEach((x)=>x.setAttribute('aria-pressed',String(x.dataset.fin==='')));document.querySelectorAll('[data-seg]').forEach((x)=>x.setAttribute('aria-pressed',String(x.dataset.seg==='')));renderHead();renderRows();});
 $('tech-copy').addEventListener('click',()=>{copyText($('tech-prompt').textContent).then((ok)=>toast(ok?'Prompt copié':'Copie impossible : sélectionnez le texte.'));});
 try{if(localStorage.getItem('upsell-tech')==='0')$('tech').open=false;}catch(_){}
 $('tech').addEventListener('toggle',(e)=>{try{localStorage.setItem('upsell-tech',e.target.open?'1':'0');}catch(_){}});
