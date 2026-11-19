@@ -30,8 +30,10 @@ async function lirePersonnes() {
   return JSON.parse(await deBase64(b));
 }
 
-/* Suivi automatique : relu dans CRMIA et DELIV'IA (lecture seule) à 12 h et 19 h, puis rangé dans donnees/suivi_auto. */
-const DEPUIS = '2026-11-03';
+/* Suivi automatique : relu dans CRMIA et DELIV'IA (lecture seule) à 12 h et 19 h, puis rangé dans donnees/suivi_auto.
+   DEPUIS = lancement du challenge. Les personnes du tableau sont déjà clientes : une opportunité CRMIA créée avant
+   cette date est leur vente d'origine (pas un upsell) et ne compte pas, même si la requête la renvoie. */
+const DEPUIS = '2026-11-19';
 /* Nom CRMIA → nom du tableau, quand ils diffèrent. */
 const ALIAS = { Nizar: 'Nizar Alrobiai' };
 const ETAPES = { rdv_pris: 'RDV pris', no_show: 'No show', nurturing: 'Nurturing', motive: 'Motivé', inscription_en_cours: 'Inscription en cours', inscription_validee: 'Inscription validée', paye: 'Payé', lost: 'Perdu', retracte: 'Rétracté' };
@@ -48,8 +50,8 @@ function texteDelivia(x) {
 }
 function appliquerSuivi(personnes, s) {
   for (const r of personnes) {
-    const c = s.crm[r.email];
-    if (c && c.length) {
+    const c = (s.crm[r.email] || []).filter((o) => (o.dc || '') >= DEPUIS);
+    if (c.length) {
       const der = c.slice().sort((a, b) => (b.dm || '').localeCompare(a.dm || ''))[0];
       r.crm_opps = c;
       r.crm_statut = ETAPES[der.s] || der.s;
@@ -92,6 +94,7 @@ async function synchroniser({ crm, deliv }) {
   }
   const s = { depuis: DEPUIS, crm: {}, dv: {} };
   for (const [id, e, tel, ci, cl0, st, ty, v, dc, dm] of lc) {
+    if (dc < DEPUIS) continue;
     const cl = ALIAS[cl0] || cl0;
     const r = parEmail.get(e) || parId.get(ci) || (tel.length >= 9 ? parTel.get(tel.slice(-9)) : null);
     if (!r) continue;

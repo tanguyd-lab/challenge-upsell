@@ -73,7 +73,7 @@ function cellFor(tr,c,r){
   else if(c.t==='link'){const a=document.createElement('a');a.className='lnk'+(v==='Ouvrir la fiche'?'':' soft');a.href=r.crmia_url;a.target='_blank';a.rel='noopener';a.textContent=v;td.append(a);}
   else if(c.t==='pick')td.append(pick(r,c.k));
   else if(c.t==='lien'){if(c.k==='lien_ard')lienCell(td,r.ard_url,'Copier le lien ARD de cette personne, prêt à envoyer',preparerArd(r.ard_url),'Préparer',"Répondre à sa place (offre, financement, date), puis générer le lien");else lienCell(td,URL_BRAS_DROIT,"Copier le lien du formulaire d'accompagnement",URL_BRAS_DROIT,'Ouvrir',"Ouvrir le formulaire d'accompagnement");}
-  else if(c.t==='crm'){if(v){const s=document.createElement('span');s.className='tag t-'+(CRM_TON[v]||'x');s.textContent=v;s.title=r.crm_detail||'';td.append(s);td.title=r.crm_detail||'';}else{const s=document.createElement('span');s.className='none';s.textContent='Aucune';s.title='Aucune opportunité CRMIA depuis le 3 novembre';td.append(s);}}
+  else if(c.t==='crm'){if(v){const s=document.createElement('span');s.className='tag t-'+(CRM_TON[v]||'x');s.textContent=v;s.title=r.crm_detail||'';td.append(s);td.title=r.crm_detail||'';}else{const s=document.createElement('span');s.className='none';s.textContent='Aucune';s.title='Aucune opportunité CRMIA depuis le 19 novembre';td.append(s);}}
   else if(c.t==='tag'){const s=document.createElement('span');s.className='tag t-'+(TAG[v]||'x');s.textContent=v;td.append(s);}
   else if(c.t==='copy'){if(v){const b=document.createElement('button');b.type='button';b.className='cp';b.title='Copier';b.dataset.v=v;if(c.k==='telephone'&&r.telephone_source)b.title='Copier · source : '+r.telephone_source;const s=document.createElement('span');s.textContent=v;b.append(s);b.insertAdjacentHTML('beforeend',COPY_ICO);td.append(b);}else if(c.k==='telephone'){const s=document.createElement('span');s.className='none';s.textContent='Non trouvé';td.append(s);}if(c.k==='telephone'&&v){const u=lienAppel(v);const last=td.lastElementChild;if(u&&last){const w=document.createElement('div');w.className='liens';w.append(last);const a=document.createElement('a');a.className='lopen appel';a.href=u;a.target='_blank';a.rel='noopener';a.title="Appeler avec Allô";a.textContent='Appeler';w.append(a);td.append(w);}}}
   else td.textContent=v;
@@ -93,7 +93,7 @@ async function renderFiche(){
   for(const k of ['personne','activite','email','telephone','financement','parcours','coaching','contact','sources','kyc','angle'])$('ff-'+k).textContent=r[k];
   $('ff-acc').textContent=r.accompagnement+(r.accompagnement_detail?' : '+r.accompagnement_detail:'');
   $('ff-fiche').textContent=r.qualite+' · '+r.fiche_type;
-  $('ff-crm').textContent=r.crm_detail||'Aucune opportunité CRMIA depuis le 3 novembre';document.querySelector('.facts .dv').hidden=!r.nouveau_delivia;$('ff-dv').textContent=r.nouveau_delivia||'';
+  $('ff-crm').textContent=r.crm_detail||'Aucune opportunité CRMIA depuis le 19 novembre';document.querySelector('.facts .dv').hidden=!r.nouveau_delivia;$('ff-dv').textContent=r.nouveau_delivia||'';
   document.querySelectorAll('.facts .cli').forEach((d)=>{d.hidden=r.segment!=='intra';});$('ff-infos_client').textContent=r.infos_client||'';$('ff-apprenants_formes').textContent=r.apprenants_formes||'';
   for(const k of ['besoins','questions','pistes'])$('fl-'+k).replaceChildren(...r[k].split('\n').map((l)=>{const li=document.createElement('li');li.textContent=l.replace(/^(\d+\.|-)\s+/,'');return li;}));
   $('ff-crmia').hidden=!r.crmia_url;if(r.crmia_url){$('ff-crmia').href=lienCrmia(r.crmia_url);$('ff-crmia').target='crmia';$('ff-crmia').textContent=r.crmia==='Fiche entreprise'?'Ouvrir la fiche entreprise dans CRMIA':'Ouvrir dans CRMIA';}$('ff-telephone').textContent=r.telephone||'Non trouvé';$('ff-ard').dataset.v=r.ard_url;$('ff-bd').dataset.v=URL_BRAS_DROIT;
@@ -181,16 +181,18 @@ function stats(){
   for(const r of data){
     const s=get(r.email);if(s.closeur&&chall.has(s.closeur))fiche(s.closeur).porte++;
     const par=new Map();
-    for(const o of r.crm_opps||[]){if(!chall.has(o.cl)||(min&&Date.parse(o.dm)<min))continue;const b=par.get(o.cl)||{p:0,g:false,l:false,v:0};b.p=Math.max(b.p,PTS[o.s]||0);if(GAGNE.has(o.s)){b.g=true;b.v+=Number(o.v)||0;}if(o.s==='lost')b.l=true;par.set(o.cl,b);}
+    for(const o of r.crm_opps||[]){const n=qui(r,o);if(!chall.has(n)||(min&&Date.parse(o.dm)<min))continue;const b=par.get(n)||{p:0,g:false,l:false,v:0};b.p=Math.max(b.p,PTS[o.s]||0);if(GAGNE.has(o.s)){b.g=true;b.v+=Number(o.v)||0;}if(o.s==='lost')b.l=true;par.set(n,b);}
     for(const [n,b] of par){const c=fiche(n);c.traites++;c.points+=b.p;if(b.p)c.avance++;if(b.g){c.closes++;c.ca+=b.v;}else if(b.l)c.lost++;}
   }
   return [...m.values()].filter((c)=>c.porte||c.traites).sort((a,b)=>b.points-a.points||b.closes-a.closes||b.ca-a.ca||coll.compare(a.nom,b.nom));
 }
-function victoires(){const chall=new Set(listes.closeurs);return data.flatMap((r)=>(r.crm_opps||[]).filter((o)=>chall.has(o.cl)&&GAGNE.has(o.s)).map((o)=>({r,o}))).sort((a,b)=>coll.compare(b.o.dm||'',a.o.dm||''));}
+/* Les points vont au closeur indiqué dans le tableau ; le closeur de l'opportunité CRMIA ne sert que si la personne n'a pas de closeur. */
+const qui=(r,o)=>get(r.email).closeur||o.cl;
+function victoires(){const chall=new Set(listes.closeurs);return data.flatMap((r)=>(r.crm_opps||[]).filter((o)=>chall.has(qui(r,o))&&GAGNE.has(o.s)).map((o)=>({r,o,cl:qui(r,o)}))).sort((a,b)=>coll.compare(b.o.dm||'',a.o.dm||''));}
 const CROWN='<svg class="crown" viewBox="0 0 30 22"><path d="M2 20 L1 6 L9 12 L15 1 L21 12 L29 6 L28 20Z" fill="#f59e0b"/><circle cx="1.5" cy="5" r="1.5" fill="#f59e0b"/><circle cx="15" cy="1.5" r="1.5" fill="#f59e0b"/><circle cx="28.5" cy="5" r="1.5" fill="#f59e0b"/></svg>';
 function renderBoard(){
   if(view!=='classement'||!data.length)return;
-  const st=stats(),tot=st.reduce((a,c)=>a+c.points,0),cl=st.reduce((a,c)=>a+c.closes,0);const sa=window.__suiviAuto;$('g-maj').textContent='Calculé depuis CRMIA : opportunités créées depuis le 3 novembre sur les personnes du tableau. Mis à jour à 12 h et 19 h'+(sa&&sa.maj_le?', dernière mise à jour le '+new Date(sa.maj_le).toLocaleString('fr-FR',{dateStyle:'medium',timeStyle:'short'}):'')+'.';
+  const st=stats(),tot=st.reduce((a,c)=>a+c.points,0),cl=st.reduce((a,c)=>a+c.closes,0);const sa=window.__suiviAuto;$('g-maj').textContent='Calculé depuis CRMIA : opportunités créées depuis le 19 novembre sur les personnes du tableau. Mis à jour à 12 h et 19 h'+(sa&&sa.maj_le?', dernière mise à jour le '+new Date(sa.maj_le).toLocaleString('fr-FR',{dateStyle:'medium',timeStyle:'short'}):'')+'.';
   $('g-c').textContent=String(cl);$('g-t').textContent=String(data.length);$('g-b').style.width=Math.min(100,cl/data.length*100).toFixed(1)+'%';$('g-p').textContent=String(tot);$('g-a').textContent=String(st.length);
   const pod=$('podium');pod.replaceChildren();
   const order=[1,0,2];
@@ -215,10 +217,10 @@ function renderBoard(){
   const wins=victoires().slice(0,8);
   const fd=$('feed');
   if(!wins.length){const e=el('div','empty');e.append(el('b','','Aucun close pour l\'instant'));e.append(document.createTextNode('Le premier prend le badge Premier sang.'));fd.replaceChildren(e);}
-  else fd.replaceChildren(...wins.map((w)=>{const d=el('div');d.append(el('b','',w.o.cl),document.createTextNode(' a closé '),el('b','',w.r.personne),document.createTextNode(w.o.v?' · '+eurs(w.o.v):''));if(w.o.dm)d.append(el('time','',new Date(w.o.dm).toLocaleString('fr-FR',{dateStyle:'medium',timeStyle:'short'})));return d;}));
+  else fd.replaceChildren(...wins.map((w)=>{const d=el('div');d.append(el('b','',w.cl),document.createTextNode(' a closé '),el('b','',w.r.personne),document.createTextNode(w.o.v?' · '+eurs(w.o.v):''));if(w.o.dm)d.append(el('time','',new Date(w.o.dm).toLocaleString('fr-FR',{dateStyle:'medium',timeStyle:'short'})));return d;}));
 }
 function renderRules(){
-  const r=$('rules');const a=el('div');a.append(el('h4','','Barème'));Object.entries({'RDV pris':10,'Motivé':30,'Inscription en cours':50,'Inscription validée ou payé':100}).forEach(([k,v])=>{const l=el('div','rl');l.append(el('span','',k),el('b','','+'+v));a.append(l);});a.append(el('p','','Étape de l\'opportunité dans CRMIA, créée depuis le 3 novembre sur une personne du tableau, au nom du closeur. Par personne, seule la meilleure étape compte.'));
+  const r=$('rules');const a=el('div');a.append(el('h4','','Barème'));Object.entries({'RDV pris':10,'Motivé':30,'Inscription en cours':50,'Inscription validée ou payé':100}).forEach(([k,v])=>{const l=el('div','rl');l.append(el('span','',k),el('b','','+'+v));a.append(l);});a.append(el('p','','Étape de l\'opportunité dans CRMIA, créée depuis le 19 novembre sur une personne du tableau (déjà cliente : c\'est un upsell). Les points vont au closeur indiqué dans le tableau. Par personne, seule la meilleure étape compte.'));
   const b=el('div');b.append(el('h4','','Niveaux'));LEVELS.forEach((x)=>{const l=el('div','rl');l.append(el('span','',x[1]),el('b','',x[0]+' pts'));b.append(l);});
   const c=el('div');c.append(el('h4','','Badges'));const bs=el('div','badges');[['Premier sang : 1 close','green'],['Hat-trick : 3 closes','amber'],['Dix-de-der : 10 closes','pink'],['Machine à RDV : 10 dossiers avancés','blue'],['Sniper : 30 % de conversion','violet']].forEach((x)=>bs.append(el('span','tag t-'+x[1],x[0])));c.append(bs);
   r.replaceChildren(a,b,c);
@@ -244,7 +246,7 @@ function confetti(){
   const t0=performance.now();
   (function tick(now){const e=now-t0;x.clearRect(0,0,W,H);for(const p of P){p.vy+=.32;p.vx*=.992;p.x+=p.vx;p.y+=p.vy;p.r+=p.vr;x.save();x.translate(p.x,p.y);x.rotate(p.r);x.globalAlpha=Math.max(0,1-e/3400);x.fillStyle=p.c;x.fillRect(-p.s/2,-p.s/4,p.s,p.s/2);x.restore();}if(e<3400)requestAnimationFrame(tick);else{x.clearRect(0,0,W,H);c.hidden=true;}})(t0);
 }
-function feter(){const moi=window.__moi;if(!moi)return;let vus=null;try{vus=JSON.parse(localStorage.getItem('upsell-vus')||'null');}catch(_){}const mes=victoires().filter((w)=>w.o.cl===moi.nom);const neuves=mes.filter((w)=>!(vus||[]).includes(w.o.id));try{localStorage.setItem('upsell-vus',JSON.stringify(mes.map((w)=>w.o.id)));}catch(_){}if(neuves.length)setTimeout(()=>celebrate(neuves[0].r.email,neuves[0].r.personne+' est closé · +'+(PTS[neuves[0].o.s]||100)+' points'),600);}
+function feter(){const moi=window.__moi;if(!moi)return;let vus=null;try{vus=JSON.parse(localStorage.getItem('upsell-vus')||'null');}catch(_){}const mes=victoires().filter((w)=>w.cl===moi.nom);const neuves=mes.filter((w)=>!(vus||[]).includes(w.o.id));try{localStorage.setItem('upsell-vus',JSON.stringify(mes.map((w)=>w.o.id)));}catch(_){}if(neuves.length)setTimeout(()=>celebrate(neuves[0].r.email,neuves[0].r.personne+' est closé · +'+(PTS[neuves[0].o.s]||100)+' points'),600);}
 /* Données */
 function info(t){const e=$('etat');e.textContent=t;e.hidden=!t;}
 info('Chargement des personnes…');
